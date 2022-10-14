@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "bsp2srf": {
+      "commandName": "Project",
+      "commandLineArgs": "lmpatch ctf_yavin.bsp ctf_yavin-hiresstuff.bsp"
+    }
+  }
+}

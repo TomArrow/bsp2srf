@@ -49,18 +49,18 @@ namespace bsp2srf
             inputFile = filepath;
         }
 
-        struct Lump
+        public struct Lump
         {
             public int offset;
             public int length;
         }
-        struct Shader
+        public struct Shader
         {
             public string shaderName;
             public int surfaceFlags;
             public int contentFlags;
         }
-        struct Surface
+        public struct Surface
         {
             public int shaderNum;
             public Shader shader;
@@ -68,9 +68,24 @@ namespace bsp2srf
             public Vector3[] lightmapVecs;
             public int numVerts;
             public int numIndexes;
+            public SurfaceLightmapInfo lmInfo;
         }
 
-        public void doStuff(string outputFile){
+
+        public class SurfaceLightmapInfo
+        {
+            public byte[] lightmapStyles = new byte[MAXLIGHTMAPS], vertexStyles = new byte[MAXLIGHTMAPS]; //8
+            public int[] lightmapNum = new int[MAXLIGHTMAPS]; //4*4
+            public int[] lightmapX = new int[MAXLIGHTMAPS], lightmapY=new int[MAXLIGHTMAPS]; // 8*4
+            public int lightmapWidth, lightmapHeight;//8
+
+            public Vector3 lightmapOrigin; //3*4
+            public Vector3[] lightmapVecs = new Vector3[3];	// for patches, [0] and [1] are lodbounds //3*3*4
+        }
+
+        // Lminfo: 8+4*4+8*4+8+3*4+3*3*4 = 112
+
+        public void bsp2srf(string outputFile){
             using(BinaryReader sr = new BinaryReader( new MemoryStream(contents)))
             {
 
@@ -239,7 +254,162 @@ namespace bsp2srf
 
             }
         }
+        
+        public Surface[] getSurfaces(){
+            using(BinaryReader sr = new BinaryReader( new MemoryStream(contents)))
+            {
 
+                int ident = sr.ReadInt32();
+                int version = sr.ReadInt32();
+
+                Lump[] lumps = new Lump[HEADER_LUMPS];
+                for(int i = 0; i < HEADER_LUMPS; i++)
+                {
+                    int offset = sr.ReadInt32();
+                    int length = sr.ReadInt32();
+                    lumps[i] = new Lump() { offset = offset, length = length };
+                    Console.WriteLine((LUMPS)i);
+                    Console.WriteLine(offset);
+                    Console.WriteLine(length);
+                }
+
+                int singleShaderLength = MAX_QPATH + 4 + 4;
+                Shader[] shaders = new Shader[lumps[(int)LUMPS.LUMP_SHADERS].length/ singleShaderLength];
+
+                sr.BaseStream.Seek(lumps[(int)LUMPS.LUMP_SHADERS].offset, SeekOrigin.Begin);
+                for(int i=0; i < shaders.Count(); i++)
+                {
+                    //string shaderName = Encoding.ASCII.GetString( sr.ReadBytes(MAX_QPATH));
+                    
+                    string shaderName = Encoding.ASCII.GetString( sr.ReadBytes(MAX_QPATH)).TrimEnd((Char)0);
+                    int surfaceFlags = sr.ReadInt32();
+                    int contentFlags = sr.ReadInt32();
+                    shaders[i] = new Shader() { shaderName = shaderName, surfaceFlags = surfaceFlags, contentFlags = contentFlags };
+                    Console.WriteLine(shaderName);
+                }
+
+
+
+                /*
+                typedef struct {
+	                int			shaderNum;
+	                int			fogNum;
+	                int			surfaceType;
+
+	                int			firstVert;
+	                int			numVerts;
+
+	                int			firstIndex;
+	                int			numIndexes; //7*4
+
+	                byte		lightmapStyles[MAXLIGHTMAPS], vertexStyles[MAXLIGHTMAPS]; //8
+	                int			lightmapNum[MAXLIGHTMAPS]; //4*4
+	                int			lightmapX[MAXLIGHTMAPS], lightmapY[MAXLIGHTMAPS]; // 8*4
+	                int			lightmapWidth, lightmapHeight;//8
+
+	                vec3_t		lightmapOrigin; //3*4
+	                vec3_t		lightmapVecs[3];	// for patches, [0] and [1] are lodbounds //3*3*4
+
+	                int			patchWidth;
+	                int			patchHeight; //2*4
+                } dsurface_t; 
+
+                // Total: 7*4 + 8 + 4*4+8*4+8+3*4+3*3*4+2*4 = 148
+
+
+                 */
+
+
+
+                int singleSurfaceLength = 148;
+                Surface[] surfaces = new Surface[lumps[(int)LUMPS.LUMP_SURFACES].length/ singleSurfaceLength];
+
+                sr.BaseStream.Seek(lumps[(int)LUMPS.LUMP_SURFACES].offset, SeekOrigin.Begin);
+                for(int i=0; i < surfaces.Count(); i++)
+                {
+                    int shaderNum = sr.ReadInt32();
+                    int fogNum = sr.ReadInt32();
+                    int surfaceType = sr.ReadInt32();
+
+                    int firstVert = sr.ReadInt32();
+                    int numVerts = sr.ReadInt32();
+
+                    int firstIndex = sr.ReadInt32();
+                    int numIndexes = sr.ReadInt32();
+
+                    SurfaceLightmapInfo lmInfo = new SurfaceLightmapInfo();
+
+                    lmInfo.lightmapStyles = sr.ReadBytes(MAXLIGHTMAPS); // lightmapStyles
+                    lmInfo.vertexStyles = sr.ReadBytes(MAXLIGHTMAPS); // vertexStyles
+                    for(int a = 0; a < MAXLIGHTMAPS; a++)
+                    {
+                        lmInfo.lightmapNum[a] = sr.ReadInt32(); // lightmapNum
+                    }
+                    for(int a = 0; a < MAXLIGHTMAPS; a++)
+                    {
+                        lmInfo.lightmapX[a] = sr.ReadInt32(); // lightmapX
+                    }
+                    for(int a = 0; a < MAXLIGHTMAPS; a++)
+                    {
+                        lmInfo.lightmapY[a] = sr.ReadInt32(); // lightmapY
+                    }
+                    lmInfo.lightmapWidth = sr.ReadInt32(); // lightmapWidth
+                    lmInfo.lightmapHeight = sr.ReadInt32(); // lightmapHeight
+
+                    Vector3 lightmapOrigin;
+                    lightmapOrigin.X = sr.ReadSingle();
+                    lightmapOrigin.Y = sr.ReadSingle();
+                    lightmapOrigin.Z = sr.ReadSingle();
+
+                    Vector3[] lightmapVecs = new Vector3[3];
+                    lightmapVecs[0].X = sr.ReadSingle();
+                    lightmapVecs[0].Y = sr.ReadSingle();
+                    lightmapVecs[0].Z = sr.ReadSingle();
+                    lightmapVecs[1].X = sr.ReadSingle();
+                    lightmapVecs[1].Y = sr.ReadSingle();
+                    lightmapVecs[1].Z = sr.ReadSingle();
+                    lightmapVecs[2].X = sr.ReadSingle();
+                    lightmapVecs[2].Y = sr.ReadSingle();
+                    lightmapVecs[2].Z = sr.ReadSingle();
+
+                    lmInfo.lightmapOrigin = lightmapOrigin;
+                    lmInfo.lightmapVecs = lightmapVecs;
+
+                    int patchWidth= sr.ReadInt32(); 
+                    int patchHeight= sr.ReadInt32();
+
+                    surfaces[i] = new Surface() { shaderNum = shaderNum, shader = shaders[shaderNum], numVerts = numVerts, numIndexes = numIndexes, lightmapOrigins = lightmapOrigin, lightmapVecs = lightmapVecs,lmInfo=lmInfo };
+                    //Console.WriteLine(shaderName);
+                }
+
+                return surfaces;
+            }
+        }
+
+        public static byte[] createLightMapPatchFile(Surface[] baseSurfaces, Surface[] patchSurfaces)
+        {
+
+            using (MemoryStream ms = new MemoryStream())
+            {
+                using (BinaryWriter sw = new BinaryWriter(ms))
+                {
+                    // A single surface segments length is 112 (lmInfo) plus one byte that indicates if it is being used.
+                    foreach (Surface baseSurface in baseSurfaces)
+                    {
+                        int? correspondingSurface = null;
+                        foreach (Surface patchSurface in patchSurfaces)
+                        {
+                            // check if same
+                            if(baseSurface.)
+                        }
+
+
+                    }
+                }
+                return ms.ToArray();
+            }
+
+        }
 
 
     }

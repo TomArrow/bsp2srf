@@ -29,26 +29,24 @@ namespace bsp2srf
             string baseBsp = args[0];
             string bspWithNewLightmaps = args[1];
 
-            //BSP bsp = new BSP(arg);
-            //bsp.doStuff(arg + ".srf");
 
-#if DEBUG
-            BSP bsp2 = new BSP("ctf_yavin.bsp");
-            bsp2.doStuff("ctf_yavin.srf");
-#endif
+            BSP bsp = new BSP(baseBsp);
+            BSP.Surface[] baseSurfaces = bsp.getSurfaces();
+            BSP bsp2 = new BSP(bspWithNewLightmaps);
+            BSP.Surface[] patchSurfaces = bsp2.getSurfaces();
+
+            byte[] patchFile = BSP.createLightMapPatchFile(baseSurfaces, patchSurfaces);
+
+            Console.WriteLine("test");
         }
         static void bsp2srf(string[] args)
         {
             foreach (string arg in args)
             {
                 BSP bsp = new BSP(arg);
-                bsp.doStuff(arg + ".srf");
+                bsp.bsp2srf(arg + ".srf");
             }
 
-#if DEBUG
-            BSP bsp2 = new BSP("ctf_yavin.bsp");
-            bsp2.doStuff("ctf_yavin.srf");
-#endif
         }
     }
 }
